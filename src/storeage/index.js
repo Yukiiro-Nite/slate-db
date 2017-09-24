@@ -8,7 +8,7 @@ function Storage(name) {
   this.storageName = path.basename(name);
   this.path = path.join(dataPath, this.storageName);
   let lock = Promise.resolve();
-  let reading = false;
+  let reading = {};
 
   this.init = function () {
     if(!fs.existsSync(this.path)) {
@@ -23,29 +23,46 @@ function Storage(name) {
   };
 
   this.save = function (name = 'data', data, clobber = false) {
-    reading = false;
-    lock = lock.then(() => new Promise( resolve =>
-      fs.writeFile(path.join(this.path, `${path.basename(name)}.json`), JSON.stringify(data), (err) => {
-        err && console.log('Problem Saving: ', err);
-        resolve();
-      })
-    ));
-    return lock;
+    name = path.basename(name);
+    if(clobber) {
+      reading[name] = false;
+      lock = lock.then(() => _write(path.join(this.path, `${name}.json`), data));
+      return lock;
+    } else {
+      return this.read(name).then(oldData => this.save(name, Object.assign(oldData, data), true));
+    }
   };
 
   this.read = function (name = 'data') {
-    if(!reading) {
-      reading = true;
-      lock = lock.then(() => new Promise(resolve => {
-        fs.readFile(path.join(this.path, `${path.basename(name)}.json`), (err, data) => {
-          err && console.log('Problem Reading: ', err);
-          resolve(JSON.parse(`${data}`));
-          reading = false;
-        })
-      }));
+    name = path.basename(name);
+    if(!reading[name]) {
+      reading[name] = true;
+      lock = lock.then(() => _read(path.join(this.path, `${name}.json`), name));
     }
     return lock;
   };
+  
+  function _write(path, data) {
+    return new Promise(resolve =>
+      fs.writeFile(path, JSON.stringify(data), (err) => {
+        err && console.log('Problem Saving: ', err);
+        resolve();
+      })
+    )
+  }
+
+  function _read(path, name) {
+    return new Promise(resolve => {
+      fs.readFile(path, (err, data) => {
+        if(err) {
+          console.log('Problem Reading: ', err);
+          data = '{}';
+        }
+        resolve(JSON.parse(`${data}`));
+        reading[name] = false;
+      })
+    })
+  }
 
   this.init();
 }
