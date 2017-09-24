@@ -5,8 +5,8 @@ const dataPath = require('../../config.json').dataPath;
 module.exports = Storage;
 
 function Storage(name) {
-  this.storageName = name;
-  this.path = path.join(dataPath, name);
+  this.storageName = path.basename(name);
+  this.path = path.join(dataPath, this.storageName);
   let lock = Promise.resolve();
   let reading = false;
 
@@ -22,10 +22,10 @@ function Storage(name) {
     }
   };
 
-  this.save = function (name, data, clobber = false) {
+  this.save = function (name = 'data', data, clobber = false) {
     reading = false;
     lock = lock.then(() => new Promise( resolve =>
-      fs.writeFile(path.join(this.path, 'data.json'), JSON.stringify(data), (err) => {
+      fs.writeFile(path.join(this.path, `${path.basename(name)}.json`), JSON.stringify(data), (err) => {
         err && console.log('Problem Saving: ', err);
         resolve();
       })
@@ -33,12 +33,11 @@ function Storage(name) {
     return lock;
   };
 
-  this.read = function (name) {
+  this.read = function (name = 'data') {
     if(!reading) {
       reading = true;
       lock = lock.then(() => new Promise(resolve => {
-        console.log('trying to read file');
-        fs.readFile(path.join(this.path, 'data.json'), (err, data) => {
+        fs.readFile(path.join(this.path, `${path.basename(name)}.json`), (err, data) => {
           err && console.log('Problem Reading: ', err);
           resolve(JSON.parse(`${data}`));
           reading = false;
