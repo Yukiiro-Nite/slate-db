@@ -7,53 +7,68 @@ module.exports = Storage;
 function Storage(name) {
   this.storageName = path.basename(name);
   this.path = path.join(dataPath, this.storageName);
-  let lock = Promise.resolve();
+  let startLock = Promise.resolve();
+  let lock = {};
   let reading = {};
+  let internalId = 0;
 
+  function getLock(name) {
+    return lock[name] || startLock; 
+  }
+  
+  function getID() {
+    return internalId++;
+  }
+  
   this.init = function () {
     if(!fs.existsSync(this.path)) {
       console.log(`${this.path} does not exist, creating dir`);
-      lock = new Promise(resolve => {
+      startLock = startLock.then(() => new Promise(resolve => {
         fs.mkdir(this.path, (err) => {
           err && console.log('Problem creating dir: ', err);
           resolve();
         });
-      });
+      }));
     }
   };
 
-  this.save = function (name = 'data', data, clobber = false) {
+  this.save = function (name = 'data', data) {
     name = path.basename(name);
-    if(clobber) {
-      reading[name] = false;
-      lock = lock.then(() => _write(path.join(this.path, `${name}.json`), data));
-      return lock;
-    } else {
-      return this.read(name).then(oldData => this.save(name, Object.assign(oldData, data), true));
-    }
+    
+    reading[name] = false;
+    lock[name] = getLock(name).then(() => _write(path.join(this.path, `${name}.json`), data));
+    return lock[name];
   };
 
   this.read = function (name = 'data') {
     name = path.basename(name);
     if(!reading[name]) {
       reading[name] = true;
-      lock = lock.then(() => _read(path.join(this.path, `${name}.json`), name));
+      lock[name] = getLock(name).then(() => _read(path.join(this.path, `${name}.json`), name));
     }
-    return lock;
+    return lock[name];
   };
   
   function _write(path, data) {
-    return new Promise(resolve =>
+    const id = getID();
+    console.log(`[${id}] Setting up write for ${path}`);
+    return new Promise(resolve => {
+      console.log(`[${id}] Starting write for ${path}`);
       fs.writeFile(path, JSON.stringify(data), (err) => {
+        console.log(`[${id}] Finished write for ${path}`);
         err && console.log('Problem Saving: ', err);
         resolve();
       })
-    )
+    })
   }
 
   function _read(path, name) {
+    const id = getID();
+    console.log(`[${id}] Setting up read for ${path}`);
     return new Promise(resolve => {
+      console.log(`[${id}] Starting read for ${path}`);
       fs.readFile(path, (err, data) => {
+        console.log(`[${id}] Finished read for ${path}`);
         if(err) {
           console.log('Problem Reading: ', err);
           data = '{}';
@@ -63,6 +78,6 @@ function Storage(name) {
       })
     })
   }
-
+  
   this.init();
 }
