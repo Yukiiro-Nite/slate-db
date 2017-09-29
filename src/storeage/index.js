@@ -48,6 +48,11 @@ function Storage(name) {
     }
     return lock[name];
   };
+
+  this.delete = function (name = 'data') {
+    name = path.basename(name);
+    lock[name] = getLock(name).then(() => _delete(path.join(this.path, `${name}.json`)));
+  };
   
   function _write(path, data) {
     const id = getID();
@@ -75,6 +80,19 @@ function Storage(name) {
         }
         resolve(JSON.parse(`${data}`));
         reading[name] = false;
+      })
+    })
+  }
+
+  function _delete(path) {
+    const id = getID();
+    console.log(`[${id}] Setting up delete for ${path}`);
+    return new Promise(resolve => {
+      console.log(`[${id}] Starting delete for ${path}`);
+      fs.unlink(path, (err) => {
+        console.log(`[${id}] Finished delete for ${path}`);
+        err && console.log(`Problem Deleting: `, err);
+        resolve();
       })
     })
   }
